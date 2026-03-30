@@ -10,4 +10,7 @@ wheels/
 .venv
 
 dataset/
-test.ipynb
+*.ipynb
+
+logs/
+saved_models/

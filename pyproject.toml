@@ -5,6 +5,7 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
+    "albumentationsx[headless]>=2.1.0",
     "matplotlib>=3.10.8",
     "torch>=2.10.0",
     "torchvision>=0.25.0",
