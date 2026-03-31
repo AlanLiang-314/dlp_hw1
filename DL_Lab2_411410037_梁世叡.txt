@@ -1,30 +1,30 @@
 > for training and inference guides, please refer to `running_guide.md` for detailed instructions.
 
 ## implementation highlights
-Use diverse augmentations to improve model generalization and prevent overfitting. Including random cropping, horizontal and vertical flipping, rotation, color jittering, grayscale, and random erasing. Train for longer epochs while not overfitting.
+Use diverse augmentations to improve model generalization and prevent overfitting. These include random cropping, horizontal and vertical flipping, rotation, color jittering, grayscale, and random erasing. Aim for longer training epochs while monitoring for overfitting.
 
 ## data preprocessing strategy
-For Unet:
+For UNet:
 - Randomly crop the image to `512x512`, then pad it to `572x572` using `cv2.BORDER_REFLECT`, and finally center crop the mask to `388x388`.
 For ResNet34_UNet:
 - Directly resize/crop the input to `256x256` without UNet-style padding/cropping, and output the same size as input.
 - Normalize with mean = (0.5, 0.5, 0.5) and std = (0.5, 0.5, 0.5)
 
-
 ## training strategy
-for unet, use longer warmup and larger weight decay (1e-4) to stabilize training. For resnet34_unet, use shorter warmup and smaller weight decay (1e-5) to allow faster convergence.
-gradient clipping is essential for unet to prevent loss spikes, while resnet34_unet is more stable and can be trained with a larger learning rate.
+For UNet, we use longer warmup and larger weight decay (1e-4) to stabilize training. For resnet34_unet, we use shorter warmup and smaller weight decay (1e-5) to allow faster convergence.
+The Dice score on the validation set is used to select the best model and determine the optimal classification threshold.
 
 ## key observations
-- UNet lacks batch normalization and attention mechanisms, making it more sensitive to hyperparameters and unstable during training, with more loss spikes in the curve (requiring smaller learning rates and gradient clipping). ResNet34_UNet's ResNet34 backbone and CBAM attention enable the model to learn effective features more easily, resulting in more stable training.
+UNet lacks batch normalization and attention mechanisms, making it more sensitive to hyperparameters and prone to instability, as evidenced by more frequent loss spikes (requiring smaller learning rates and gradient clipping).
+In contrast, ResNet34_UNet’s ResNet34 backbone and CBAM attention modules allow the model to extract effective features more easily, resulting in a more stable training process.
 
 ## comparison between UNet and ResNet34_UNet
 - Encoder part
-    - Unet: only convolutional layers and ReLU, no batch normalization.
-    - ResNet34_UNet: ResNet34 backbone with batch normalization and skip connections.
+    - Unet: Consists only of convolutional layers and ReLU; lacks batch normalization.
+    - ResNet34_UNet: Utilizes a ResNet34 backbone with batch normalization and skip connections.
 - Decoder part
-    - Unet: upsampling with transposed convolution, no attention.
-    - ResNet34_UNet: upsampling with bilinear interpolaration, with CBAM attention modules in each decoder block.
+    - Unet: Uses transposed convolutions for upsampling; no attention mechanisms.
+    - ResNet34_UNet: Uses bilinear interpolation for upsampling, integrated with CBAM attention modules in each decoder block.
 
 ## AI disclosure
-Copilot and Gemini were used for code completion and debugging.
+Copilot, Codex and Gemini were used for code completion, debugging and code modification.

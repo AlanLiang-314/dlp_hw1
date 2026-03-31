@@ -8,7 +8,7 @@ The training and inference script are designed to run on a single NVIDIA GeForce
 We recommend using `uv sync` for environment setup and package management. Alternatively, a `requirements.txt` is provided for standard pip installation.
 
 ## inference guide
-First, download the dataset by running:
+To reproduce the public score on the Kaggle Leaderboard, first, download the dataset by running:
 
 ```bash
 bash download_data.sh
