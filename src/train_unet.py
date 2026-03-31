@@ -237,13 +237,13 @@ class ValAugmentation:
 class OxfordPetsDataset(Dataset):
     def __init__(self, transform=None, split='train'):
         if split == 'train':
-            self.datalist_path = os.path.join(DATASET_DIR, 'annotations', 'train.txt')
+            self.datalist_path = os.path.join(DATASET_DIR, 'train.txt')
         elif split == 'val':
-            self.datalist_path = os.path.join(DATASET_DIR, 'annotations', 'val.txt')
+            self.datalist_path = os.path.join(DATASET_DIR, 'val.txt')
         elif split == 'test_unet':
-            self.datalist_path = os.path.join(DATASET_DIR, 'annotations', 'test_unet.txt')
+            self.datalist_path = os.path.join(DATASET_DIR, 'test_unet.txt')
         elif split == 'test_resnet_unet':
-            self.datalist_path = os.path.join(DATASET_DIR, 'annotations', 'test_resnet_unet.txt')
+            self.datalist_path = os.path.join(DATASET_DIR, 'test_resnet_unet.txt')
         else:
             raise ValueError(f"Unsupported split: {split}")
         

@@ -40,14 +40,14 @@ bash download_data.sh
 
 For UNet, run:
 ```bash
-python -m src.train_unet --configs configs/baseline_v12.json
+python -m src.train_unet --config configs/baseline_v12.json
 ```
 
-the final model will be saved in `logs/baseline_v12/saved_models/best_model.pth`. Please use `src/inference.py` to evaluate the model and generate the submission CSV.
+the final model will be saved in `logs/new_unet_baseline_v12/saved_models/best_model.pth`. Please use `src/inference.py` to evaluate the model and generate the submission CSV.
 
 For ResNet34_UNet, run:
 ```bash
-python -m src.train_resnet --configs configs/resnet_v13.json
+python -m src.train_resnet --config configs/resnet_v13.json
 ``` 
 
 the final model will be saved in `logs/resnet_v13/saved_models/best_model.pth`. Please use `src/inference.py` to evaluate the model and generate the submission CSV.
