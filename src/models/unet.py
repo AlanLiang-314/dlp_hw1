@@ -115,10 +115,3 @@ class UNet(nn.Module):
         out = self.outconv(u4)
         # out = F.interpolate(out, size=(x.shape[2], x.shape[3]), mode='bilinear', align_corners=False)
         return out
-
-if __name__ == "__main__":
-    model = UNet(in_channels=3, out_channels=1)
-    x = torch.randn(1, 3, 572, 572)
-    output = model(x)
-    print(f"Input shape: {x.shape}")
-    print(f"Output shape: {output.shape}")

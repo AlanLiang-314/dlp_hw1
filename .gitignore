@@ -15,3 +15,5 @@ dataset/
 
 logs/
 saved_models/
+submissions/
+.kaggle_token

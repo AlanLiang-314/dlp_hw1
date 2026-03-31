@@ -21,12 +21,13 @@ class SimpleLogger:
         os.makedirs(self.vis_path, exist_ok=True)
         self.saved_model_path = os.path.join(self.save_path, "saved_models")
         os.makedirs(self.saved_model_path, exist_ok=True)
+        self.epoch_log_path = os.path.join(self.save_path, "epoch_log.jsonl")
         
         self.jsonl_path = os.path.join(self.save_path, "log.jsonl")
         self.training_summary_path = os.path.join(self.save_path, "training_summary.json")
         self.trainning_summary_path = os.path.join(self.save_path, "trainning_summary.json")
         self.current_step = 0
-        self.history = defaultdict(list)  # 用於暫存數據以便繪圖
+        self.history = defaultdict(list)
         self.best_metrics = {}
         self.save_training_summary()
 
@@ -82,33 +83,37 @@ class SimpleLogger:
                 json.dump(summary_data, f, indent=4, ensure_ascii=False)
 
     def log(self, metrics: dict, step: int = None, verbose: bool = True):
-        """記錄數據，若未提供 step 則自動遞增"""
         if step is not None:
             self.current_step = step
         
         current_timestamp = datetime.now().isoformat()
         current_step = self.current_step
 
-        # 整合數據
         log_entry = {"step": current_step, **metrics, "timestamp": current_timestamp}
         
-        # 1. 輸出至終端機
         if verbose:
             nice_str = f"[Step {self.current_step}] " + " | ".join([f"{k}: {v:.4f}" if isinstance(v, float) else f"{k}: {v}" for k, v in metrics.items()])
             print(nice_str)
 
-        # 2. 寫入 JSONL
         with open(self.jsonl_path, "a", encoding="utf-8") as f:
             f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
         
-        # 3. 更新記憶體內的歷史紀錄 (供 plot 使用)
         for k, v in metrics.items():
             self.history[k].append((self.current_step, v))
 
-        if self._update_best_metrics(metrics, step=current_step, timestamp=current_timestamp):
-            self.save_training_summary()
+        # if self._update_best_metrics(metrics, step=current_step, timestamp=current_timestamp):
+        #     self.save_training_summary()
             
         self.current_step += 1
+        
+    def log_epoch(self, epoch: int, metrics: dict):
+        
+        with open(self.epoch_log_path, "a", encoding="utf-8") as f:
+            log_entry = {"epoch": epoch, **metrics, "timestamp": datetime.now().isoformat()}
+            f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
+        
+        nice_str = f"[Epoch {epoch}] " + " | ".join([f"{k}: {v:.4f}" if isinstance(v, float) else f"{k}: {v}" for k, v in metrics.items()])
+        print(nice_str)
 
     def save_config(self, config: dict):
         with open(os.path.join(self.save_path, "config.json"), "w", encoding="utf-8") as f:
@@ -141,6 +146,31 @@ class SimpleLogger:
             
         return plot_results
     
+
+class LossFactory:
+    @staticmethod
+    def get_loss(loss_type="bce", **kwargs):
+        loss_type = loss_type.lower()
+        if loss_type == "bce":
+            return BCELossWrapper(**kwargs)
+        elif loss_type == "focal":
+            return FocalLoss(**kwargs)
+        elif loss_type == "bce_focal":
+            return BCEFocalLoss(**kwargs)
+        elif loss_type == "focal_dice":
+            return FocalDiceLoss(**kwargs)
+        elif loss_type == "mixed":
+            return MixedLoss(**kwargs)
+        else:
+            raise ValueError(f"Unsupported loss type: {loss_type}")
+
+class BCELossWrapper(nn.Module):
+    def __init__(self):
+        super(BCELossWrapper, self).__init__()
+
+    def forward(self, logits, targets):
+        return F.binary_cross_entropy_with_logits(logits, targets.float())
+
 class FocalLoss(nn.Module):
     def __init__(self, alpha=0.25, gamma=2.0, reduction='mean'):
         super(FocalLoss, self).__init__()
@@ -148,28 +178,224 @@ class FocalLoss(nn.Module):
         self.gamma = gamma
         self.reduction = reduction
 
-    def forward(self, inputs, targets):
-        BCE_loss = F.binary_cross_entropy_with_logits(inputs, targets, reduction='none')
-        pt = torch.exp(-BCE_loss)
-        focal_loss = self.alpha * (1 - pt) ** self.gamma * BCE_loss
-        
+    def forward(self, logits, targets):
+        targets = targets.float()
+        bce_loss = F.binary_cross_entropy_with_logits(logits, targets, reduction='none')
+        probs = torch.sigmoid(logits)
+        p_t = probs * targets + (1 - probs) * (1 - targets)
+        loss = self.alpha * (1 - p_t) ** self.gamma * bce_loss
+
         if self.reduction == 'mean':
-            return focal_loss.mean()
+            return loss.mean()
         elif self.reduction == 'sum':
-            return focal_loss.sum()
+            return loss.sum()
         else:
-            return focal_loss
+            return loss
+        
+class DiceLoss(nn.Module):
+    def __init__(self):
+        super(DiceLoss, self).__init__()
+
+    def forward(self, logits, targets):
+        probs = torch.sigmoid(logits)
+        targets = targets.float()
+        intersection = (probs * targets).sum(dim=(1, 2, 3))
+        dice_score = (2. * intersection + 1e-8) / (probs.sum(dim=(1, 2, 3)) + targets.sum(dim=(1, 2, 3)) + 1e-8)
+        return 1 - dice_score.mean()
+
+class TVLoss(nn.Module):
+    def __init__(self):
+        super(TVLoss, self).__init__()
     
-if __name__ == "__main__":
-    logger = SimpleLogger(run_name="experiment_v1")
+    def forward(self, logits, targets):
+        probs = torch.sigmoid(logits)
+        batch_size = probs.size(0)
+        h_tv = torch.abs(probs[:, :, 1:, :] - probs[:, :, :-1, :]).sum()
+        w_tv = torch.abs(probs[:, :, :, 1:] - probs[:, :, :, :-1]).sum()
+        return (h_tv + w_tv) / batch_size
 
-    # 自動計步
-    for i in range(5):
-        logger.log({"loss": 0.5 - i*0.1, "accuracy": 0.7 + i*0.05})
+class MixedLoss(nn.Module):
+    def __init__(self, alpha=1e-4):
+        super(MixedLoss, self).__init__()
+        self.alpha = alpha
+        self.bce_loss = BCELossWrapper()
+        self.dice_loss = DiceLoss()
+        self.tv_loss = TVLoss()
 
-    # 手動指定計步 (例如評估階段)
-    logger.log({"val_loss": 0.2}, step=100)
+    def forward(self, logits, targets):
+        bce = self.bce_loss(logits, targets)
+        dice = self.dice_loss(logits, targets)
+        tv = self.tv_loss(logits, targets)
+        return  bce + dice + self.alpha * tv
+    
+class FocalDiceLoss(nn.Module):
+    def __init__(self, alpha=0.25, gamma=2.0, reduction='mean'):
+        super(FocalDiceLoss, self).__init__()
+        self.focal_loss = FocalLoss(alpha, gamma, reduction)
+        self.dice_loss = DiceLoss()
 
-    # 生成圖表
-    charts = logger.plot()
-    print(f"圖表已生成: {charts}")
+    def forward(self, logits, targets):
+        focal = self.focal_loss(logits, targets)
+        dice = self.dice_loss(logits, targets)
+        return focal + dice
+        
+class BCEFocalLoss(nn.Module):
+    def __init__(self, alpha=0.25, gamma=2.0, reduction='mean'):
+        super(BCEFocalLoss, self).__init__()
+        self.bce_loss = BCELossWrapper()
+        self.focal_loss = FocalLoss(alpha, gamma, reduction)
+
+    def forward(self, logits, targets):
+        bce = self.bce_loss(logits, targets)
+        focal = self.focal_loss(logits, targets)
+        return bce + focal
+
+def visualize_predictions(model, dataloader, device, vis_path, step: int):
+    with torch.no_grad():
+        for batch_idx, (images, trimaps) in enumerate(dataloader):
+            images = images.to(device)
+            trimaps = trimaps.to(device).float()
+
+            outputs = model(images)
+            break  # just predict one batch for visualization
+
+    plt.figure(figsize=(12, 6))
+    for i in range(min(4, images.size(0))):
+        plt.subplot(2, 4, i + 1)
+        img = images[i].cpu().permute(1, 2, 0) * 0.5 + 0.5
+        plt.imshow(img)
+        plt.title("Input Image")
+        plt.axis('off')
+
+        plt.subplot(2, 4, i + 5)
+        trimap = trimaps[i].cpu().squeeze(0)
+        pred_mask = (torch.sigmoid(outputs[i]) > 0.5).float().cpu().squeeze(0)
+        
+        # Overlay trimap and prediction
+        overlay = np.zeros((trimap.shape[0], trimap.shape[1], 3))
+        overlay[trimap == 1] = [0, 255, 0]  # Green for foreground
+        overlay[trimap == 0] = [255, 0, 0]   # Red for background
+        overlay[pred_mask == 1] = [0, 0, 255] # Blue for predicted foreground
+        
+        plt.imshow(overlay.astype(np.uint8))
+        plt.title("Trimap & Prediction")
+        plt.axis('off')
+    plt.tight_layout()
+    save_path = os.path.join(vis_path, f"predictions_step_{step}.png")
+    plt.savefig(save_path)
+    
+
+import torch
+import numpy as np
+import time
+from collections import defaultdict
+
+class MetricFactory:
+    @staticmethod
+    def get_metrics(metric_names, threshold=0.5):
+        metrics = {}
+        for name in metric_names:
+            name = name.lower()
+            if name == "iou":
+                metrics["iou"] = IoUMetric(threshold)
+            elif name == "dice":
+                metrics["dice"] = DiceMetric(threshold)
+            elif name == "accuracy":
+                metrics["accuracy"] = AccuracyMetric(threshold)
+        return metrics
+
+class BaseMetric:
+    def __init__(self, threshold=0.5):
+        self.threshold = threshold
+
+    def __call__(self, logits, targets):
+        raise NotImplementedError
+
+class IoUMetric(BaseMetric):
+    def __call__(self, logits, targets):
+        preds = (torch.sigmoid(logits) > self.threshold).float()
+        intersection = (preds * targets).sum(dim=(1, 2, 3))
+        union = (preds + targets).clamp(0, 1).sum(dim=(1, 2, 3))
+        iou = (intersection + 1e-7) / (union + 1e-7)
+        return iou.mean().item()
+
+class DiceMetric(BaseMetric):
+    def __call__(self, logits, targets):
+        preds = (torch.sigmoid(logits) > self.threshold).float()
+        intersection = (preds * targets).sum(dim=(1, 2, 3))
+        dice = (2. * intersection + 1e-7) / (preds.sum(dim=(1, 2, 3)) + targets.sum(dim=(1, 2, 3)) + 1e-7)
+        return dice.mean().item()
+
+class AccuracyMetric(BaseMetric):
+    def __call__(self, logits, targets):
+        preds = (torch.sigmoid(logits) > self.threshold).float()
+        correct = (preds == targets).float().mean()
+        return correct.item()
+
+class MetricManager:
+    def __init__(self, loss_type="bce", metric_names=["iou", "dice"], logger=None, threshold=0.3, total_steps=None, eta_every_log=True):
+        self.criterion = LossFactory.get_loss(loss_type)
+        self.metrics_dict = MetricFactory.get_metrics(metric_names, threshold)
+        self.logger = logger
+        self.total_steps = total_steps
+        self.eta_every_log = eta_every_log
+        self.start_time = time.time()
+        self.logged_steps = 0
+
+        self.reset_epoch_stats()
+
+    @staticmethod
+    def _format_seconds(seconds):
+        seconds = int(max(0, seconds))
+        h, rem = divmod(seconds, 3600)
+        m, s = divmod(rem, 60)
+        return f"{h:02d}:{m:02d}:{s:02d}"
+
+    def reset_epoch_stats(self):
+        self.epoch_data = defaultdict(list)
+
+    def _estimate_eta(self):
+        self.logged_steps += 1
+        elapsed = time.time() - self.start_time
+        avg_step_time = elapsed / max(1, self.logged_steps)
+
+        eta_seconds = None
+        if self.total_steps is not None:
+            remaining_steps = max(0, self.total_steps - self.logged_steps)
+            eta_seconds = remaining_steps * avg_step_time
+
+        return elapsed, avg_step_time, eta_seconds
+
+    def update(self, logits, targets, step=None, prefix="train/"):
+        results = {}
+
+        loss = self.criterion(logits, targets)
+        results[f"{prefix}loss"] = loss.item()
+
+        for name, metric_fn in self.metrics_dict.items():
+            val = metric_fn(logits, targets)
+            results[f"{prefix}{name}"] = val
+
+        elapsed, avg_step_time, eta_seconds = self._estimate_eta()
+
+        if self.logger:
+            if step is not None and step % 50 == 0:
+                self.logger.log(results, step=step, verbose=True)
+                if self.total_steps is not None:
+                    print(
+                        f"[ETA] {prefix.rstrip('/')} | progress: {self.logged_steps}/{self.total_steps} "
+                        f"| elapsed: {self._format_seconds(elapsed)} "
+                        f"| remaining: {self._format_seconds(eta_seconds)} "
+                        f"| avg_step: {avg_step_time:.2f}s"
+                    )
+
+            else:
+                self.logger.log(results, step=step, verbose=False)
+
+        for k, v in results.items():
+            self.epoch_data[k].append(v)
+
+        return loss
+
+    def get_epoch_averages(self):
+        return {k: np.mean(v) for k, v in self.epoch_data.items()}
