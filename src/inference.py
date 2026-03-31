@@ -12,7 +12,6 @@ from src.models import ResNet34_UNet, UNet
 
 DATASET_DIR = "dataset"
 
-
 class OxfordPetsDataset(Dataset):
     def __init__(self, split: str = "test_resnet_unet", with_mask: bool = False):
         split_to_file = {
@@ -417,7 +416,7 @@ def main() -> None:
     parser.add_argument("--model-type", type=str, choices=["resnet", "unet"], default="resnet")
     parser.add_argument("--split", type=str, default=None)
     parser.add_argument("--model-path", type=str, required=True)
-    parser.add_argument("--output-csv", type=str, default="submissions/submission.csv")
+    parser.add_argument("--output-csv", type=str, default="submission.csv")
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--threshold", type=float, default=None)
     parser.add_argument("--max-images", type=int, default=-1)
