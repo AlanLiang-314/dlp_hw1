@@ -1,0 +1,26 @@
+{
+    "batch_size": 32,
+    "num_epochs":80,
+    "learning_rate": 0.0002,
+    "warmup_epochs": 5,
+    "weight_decay": 1e-04,
+    "device": "cuda:0",
+    "run_name": "new_unet_baseline_v12",
+    "resize_size": [
+        572,
+        572
+    ],
+    "base_size": [
+        512,
+        512
+    ],
+    "trimap_resize_size": [
+        388,
+        388
+    ],
+    "gradient_accumulation_steps": 2,
+    "mini_batch_size": 16,
+    "gradient_clip": 0.5,
+    "loss_type": "bce",
+    "augmentation_type": "v2"
+}
