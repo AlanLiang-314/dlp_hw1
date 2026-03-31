@@ -3,7 +3,8 @@
 - `python 3.12`
 - `CUDA 12.6`
 
-the training and inference script are designed to run on a single NVIDIA GeForce RTX 3090.
+The training and inference script are designed to run on a single NVIDIA GeForce RTX 3090.
+It's recommend to use `uv sync` to create a virtual environment, but an exported `requirements.txt` is also provided for pip installation.
 
 ## inference guide
 please first download the dataset with `download_data.sh`.
